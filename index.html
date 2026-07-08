@@ -1,0 +1,1303 @@
+import React, { useState, useEffect } from "react";
+import { 
+  BookOpen, HelpCircle, Layers, ClipboardCheck, AlertCircle, 
+  Plus, Sparkles, Zap, ChevronRight, Check, CheckCircle2, 
+  RotateCcw, Play, Pause, Bookmark, Award, Calendar, BarChart3,
+  Lightbulb, ArrowRight, Save, Trash2, LineChart
+} from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { StudyKit, UserStudyStats, QuizQuestion, Flashcard, WeakConcept } from "../types";
+import { BIOLOGY_STUDY_KIT, CS_STUDY_KIT, HISTORY_STUDY_KIT, INITIAL_USER_STATS } from "../demoData";
+
+interface DashboardAppProps {
+  initialKit?: StudyKit | null;
+  setView: (view: 'landing' | 'app') => void;
+}
+
+export default function DashboardApp({ initialKit, setView }: DashboardAppProps) {
+  // Collection of study decks loaded in memory
+  const [kits, setKits] = useState<{ [key: string]: StudyKit }>({
+    "Biology": BIOLOGY_STUDY_KIT,
+    "Computer Science": CS_STUDY_KIT,
+    "History": HISTORY_STUDY_KIT
+  });
+
+  const [selectedSubject, setSelectedSubject] = useState<string>("Biology");
+  const [activeTab, setActiveTab] = useState<'analytics' | 'summary' | 'quiz' | 'flashcards' | 'exam' | 'studyplan'>('analytics');
+  
+  // Custom user stats
+  const [stats, setStats] = useState<UserStudyStats>(INITIAL_USER_STATS);
+
+  // New Note Upload Area Form States
+  const [newNoteText, setNewNoteText] = useState("");
+  const [newNoteTitle, setNewNoteTitle] = useState("");
+  const [newCourseName, setNewCourseName] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingProgress, setGeneratingProgress] = useState(0);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [apiMessage, setApiMessage] = useState<string | null>(null);
+
+  // Quiz active testing states
+  const [selectedQuizAnswers, setSelectedQuizAnswers] = useState<{ [qId: string]: number }>({});
+  const [quizCompleted, setQuizCompleted] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
+
+  // Flashcards state
+  const [flashcardDeck, setFlashcardDeck] = useState<Flashcard[]>([]);
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+
+  // Exam state
+  const [examAnswer, setExamAnswer] = useState<{ [exId: string]: string }>({});
+  const [showExamRubric, setShowExamRubric] = useState<{ [exId: string]: boolean }>({});
+
+  // Study timer state
+  const [timerSecondsLeft, setTimerSecondsLeft] = useState(1500); // 25 mins pomodoro
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [activePlanStep, setActivePlanStep] = useState(0);
+
+  // Load selected initial kit from parent
+  useEffect(() => {
+    if (initialKit) {
+      const uniqueName = initialKit.title || "Custom Study Set";
+      setKits(prev => ({
+        ...prev,
+        [uniqueName]: initialKit
+      }));
+      setSelectedSubject(uniqueName);
+      setActiveTab('summary');
+    }
+  }, [initialKit]);
+
+  // Load subject-specific decks
+  const currentKit = kits[selectedSubject] || kits["Biology"];
+
+  // Populate active flashcards whenever active subject switches
+  useEffect(() => {
+    if (currentKit) {
+      setFlashcardDeck(currentKit.flashcards);
+      setCurrentCardIndex(0);
+      setIsFlipped(false);
+      // Reset quiz
+      setSelectedQuizAnswers({});
+      setQuizCompleted(false);
+      setQuizScore(0);
+    }
+  }, [selectedSubject, currentKit]);
+
+  // Timer loop
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isTimerRunning && timerSecondsLeft > 0) {
+      interval = setInterval(() => {
+        setTimerSecondsLeft(prev => prev - 1);
+      }, 1000);
+    } else if (timerSecondsLeft === 0) {
+      setIsTimerRunning(false);
+      // Play a short mock tone and bump user streak/stats!
+      try {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+        osc.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 1.25);
+      } catch (e) {
+        console.log("Mock audio notification played.");
+      }
+      alert("🎉 Focus session completed! Outstanding focus. Calvent study streak increased by 1 day!");
+      setStats(prev => ({
+        ...prev,
+        streakDays: prev.streakDays + 1,
+        completedQuizzesCount: prev.completedQuizzesCount + 1
+      }));
+      setTimerSecondsLeft(1500);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isTimerRunning, timerSecondsLeft]);
+
+  // Add a new note study deck manually or via API
+  const handleAddNewCustomDeck = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNoteText.trim() || !newNoteTitle.trim()) {
+      alert("Please provide both a Title and Note content study material.");
+      return;
+    }
+
+    setIsGenerating(true);
+    setGeneratingProgress(10);
+    setApiMessage(null);
+
+    // Simulate stepping while calling backend API route
+    const interval = setInterval(() => {
+      setGeneratingProgress(prev => {
+        if (prev < 85) return prev + 15;
+        return prev;
+      });
+    }, 400);
+
+    try {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          notesText: newNoteText, 
+          subjectTitle: newNoteTitle 
+        }),
+      });
+
+      clearInterval(interval);
+      setGeneratingProgress(100);
+
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const generatedKit: StudyKit = data.kit;
+      const kitName = generatedKit.title || newNoteTitle;
+
+      setKits(prev => ({
+        ...prev,
+        [kitName]: generatedKit
+      }));
+
+      // Update local stat progress rows
+      setStats(prev => ({
+        ...prev,
+        subjectProgress: [
+          ...prev.subjectProgress,
+          { name: kitName, completedHours: 0, totalHours: 8, color: "text-indigo-600 bg-indigo-50 border-indigo-100" }
+        ]
+      }));
+
+      setSelectedSubject(kitName);
+      setIsGenerating(false);
+      setShowAddForm(false);
+      setNewNoteText("");
+      setNewNoteTitle("");
+      setActiveTab('summary');
+      
+      if (data.message) {
+        setApiMessage(data.message);
+        setTimeout(() => setApiMessage(null), 4000);
+      }
+
+    } catch (err: any) {
+      console.error(err);
+      setIsGenerating(false);
+      clearInterval(interval);
+      alert(`Error generating study set: ${err.message || 'Server connection timed out'}`);
+    }
+  };
+
+  // Submit and grade quiz play
+  const handleAnswerQuizQuestion = (qId: string, optionIdx: number) => {
+    setSelectedQuizAnswers(prev => ({
+      ...prev,
+      [qId]: optionIdx
+    }));
+  };
+
+  const handleCompleteQuizAndGradeText = () => {
+    let score = 0;
+    const currentQuestions = currentKit.quiz;
+    
+    currentQuestions.forEach(q => {
+      if (selectedQuizAnswers[q.id] === q.correctAnswerIndex) {
+        score++;
+      } else {
+        // Log missed question into active WeakConcepts tracker!
+        const selection = selectedQuizAnswers[q.id];
+        if (selection !== undefined) {
+          setStats(prev => {
+            const hasC = prev.weakConcepts.find(wc => wc.concept === q.concept);
+            let updated: WeakConcept[];
+            if (hasC) {
+              updated = prev.weakConcepts.map(wc => 
+                wc.concept === q.concept ? { ...wc, timesMissed: wc.timesMissed + 1 } : wc
+              );
+            } else {
+              updated = [
+                ...prev.weakConcepts,
+                {
+                  concept: q.concept,
+                  timesMissed: 1,
+                  subject: selectedSubject,
+                  recommendation: `Revise fundamental parameters testing: "${q.concept}" within summary outlines.`
+                }
+              ];
+            }
+            return {
+              ...prev,
+              weakConcepts: updated
+            };
+          });
+        }
+      }
+    });
+
+    const percent = Math.round((score / currentQuestions.length) * 100);
+    setQuizScore(percent);
+    setQuizCompleted(true);
+
+    // trigger stat upgrades
+    setStats(prev => ({
+      ...prev,
+      completedQuizzesCount: prev.completedQuizzesCount + 1,
+      overallScorePercent: Math.round((prev.overallScorePercent + percent) / 2)
+    }));
+  };
+
+  // Skip, memorise, or loop flashcards
+  const handleMarkMemoCard = (cardId: string) => {
+    const updated = flashcardDeck.map(fc => 
+      fc.id === cardId ? { ...fc, memorized: true } : fc
+    );
+    setFlashcardDeck(updated);
+    
+    setStats(prev => ({
+      ...prev,
+      completedFlashcardsCount: prev.completedFlashcardsCount + 1
+    }));
+
+    // Advance to next card if left
+    if (currentCardIndex < flashcardDeck.length - 1) {
+      setTimeout(() => {
+        setIsFlipped(false);
+        setCurrentCardIndex(prev => prev + 1);
+      }, 400);
+    }
+  };
+
+  const handleNextCard = () => {
+    setIsFlipped(false);
+    if (currentCardIndex < flashcardDeck.length - 1) {
+      setCurrentCardIndex(prev => prev + 1);
+    } else {
+      setCurrentCardIndex(0); // wrap around
+    }
+  };
+
+  const handlePrevCard = () => {
+    setIsFlipped(false);
+    if (currentCardIndex > 0) {
+      setCurrentCardIndex(prev => prev - 1);
+    } else {
+      setCurrentCardIndex(flashcardDeck.length - 1);
+    }
+  };
+
+  // Convert seconds remaining to elegant mm:ss format
+  const formatTimer = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // Reset the stats back to initial settings
+  const handleResetAllData = () => {
+    if (confirm("Reset study streak, quiz analytics, and custom generated study guides?")) {
+      setStats(INITIAL_USER_STATS);
+      setKits({
+        "Biology": BIOLOGY_STUDY_KIT,
+        "Computer Science": CS_STUDY_KIT,
+        "History": HISTORY_STUDY_KIT
+      });
+      setSelectedSubject("Biology");
+      setActiveTab("analytics");
+      setQuizCompleted(false);
+      setSelectedQuizAnswers({});
+    }
+  };
+
+  return (
+    <div className="bg-white border border-zinc-200/90 rounded-2xl shadow-xl overflow-hidden study-card-border" id="app-workspace-panel">
+      
+      {/* Top Application Ribbon banner */}
+      <div className="bg-zinc-50 border-b border-zinc-150/80 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+        
+        {/* Course Select Dropdown list */}
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-mono">Subject Deck</span>
+          <select 
+            value={selectedSubject}
+            onChange={(e) => setSelectedSubject(e.target.value)}
+            className="bg-white border border-zinc-200 text-sm font-semibold text-zinc-800 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-sm min-w-[200px]"
+          >
+            {Object.keys(kits).map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="p-1.5 bg-white hover:bg-zinc-50 rounded-lg border border-zinc-200 text-zinc-600 hover:text-indigo-600 transition-colors cursor-pointer shadow-sm flex items-center justify-center"
+            title="Create new Subject Note with AI"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* API Notification Status */}
+        {apiMessage && (
+          <div className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded border border-emerald-100 flex items-center gap-1">
+            <Check className="h-3 w-3" />
+            {apiMessage}
+          </div>
+        )}
+
+        {/* Diagnostic Actions */}
+        <div className="flex items-center gap-3 justify-end w-full sm:w-auto">
+          <div className="flex items-center gap-2 text-xs bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg text-indigo-700">
+            <Sparkles className="h-3.5 w-3.5" />
+            <span className="font-mono font-bold">Standard AI Model Engine</span>
+          </div>
+          <button 
+            onClick={handleResetAllData}
+            className="px-3 py-1.5 hover:bg-zinc-100 text-zinc-405 hover:text-zinc-700 rounded-lg text-[11px] font-mono font-bold flex items-center gap-1 transition-colors border border-transparent hover:border-zinc-200 cursor-pointer"
+          >
+            <RotateCcw className="h-3 w-3" />
+            Reset Data
+          </button>
+        </div>
+
+      </div>
+
+      {/* Main Layout Divided into: Left Tab Navigation, and Right Container Viewport */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[640px]">
+        
+        {/* Side Tabs Selector Menu */}
+        <nav className="lg:col-span-3 border-r border-zinc-150 bg-zinc-50/60 p-4 flex flex-col justify-between">
+          <div className="space-y-1.5">
+            <span className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono p-2">Workspace Navigation</span>
+            
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-semibold font-sans transition-all cursor-pointer ${activeTab === 'analytics' ? 'bg-white border border-zinc-200 text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/50'}`}
+            >
+              <span className="flex items-center gap-2.5">
+                <BarChart3 className="h-4 w-4 text-indigo-500" />
+                Performance Dashboard
+              </span>
+              <span className="text-[10px] font-mono bg-zinc-200/65 text-zinc-500 px-1.5 py-0.5 rounded-full font-bold">Main</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('summary')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-semibold font-sans transition-all cursor-pointer ${activeTab === 'summary' ? 'bg-white border border-zinc-200 text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/50'}`}
+            >
+              <span className="flex items-center gap-2.5">
+                <BookOpen className="h-4 w-4 text-indigo-500" />
+                AI Summary & outline
+              </span>
+              <span className="text-[10px] font-mono bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold">Outline</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('quiz')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-semibold font-sans transition-all cursor-pointer ${activeTab === 'quiz' ? 'bg-white border border-zinc-200 text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/50'}`}
+            >
+              <span className="flex items-center gap-2.5">
+                <HelpCircle className="h-4 w-4 text-emerald-500" />
+                Smart Quiz play
+              </span>
+              <span className="text-[10px] font-mono bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded font-bold">
+                {currentKit.quiz.length} Qs
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('flashcards')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-semibold font-sans transition-all cursor-pointer ${activeTab === 'flashcards' ? 'bg-white border border-zinc-200 text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/50'}`}
+            >
+              <span className="flex items-center gap-2.5">
+                <Layers className="h-4 w-4 text-indigo-500" />
+                Flashcards deck
+              </span>
+              <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold font-mono">
+                {flashcardDeck.filter(f => !f.memorized).length} key
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('exam')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-semibold font-sans transition-all cursor-pointer ${activeTab === 'exam' ? 'bg-white border border-zinc-200 text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/50'}`}
+            >
+              <span className="flex items-center gap-2.5">
+                <ClipboardCheck className="h-4 w-4 text-amber-500" />
+                Situational Exam prep
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('studyplan')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-semibold font-sans transition-all cursor-pointer ${activeTab === 'studyplan' ? 'bg-white border border-zinc-200 text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/50'}`}
+            >
+              <span className="flex items-center gap-2.5">
+                <Calendar className="h-4 w-4 text-indigo-500" />
+                Personalised Study Plan
+              </span>
+              <span className="text-[10px] bg-zinc-200 text-zinc-650 px-1.5 py-0.5 rounded font-bold font-mono">Timer</span>
+            </button>
+          </div>
+
+          {/* Quick Focus Study Session Timer widget in the rail sidebar */}
+          <div className="mt-8 border-t border-zinc-200 pt-5 space-y-4">
+            <div className="bg-white rounded-xl border border-zinc-200 p-4 shadow-sm">
+              <span className="block text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-400 mb-1.5">Pomodoro focus timer</span>
+              
+              <div className="font-mono text-xl font-bold text-zinc-900 tracking-tight text-center mb-3">
+                {formatTimer(timerSecondsLeft)}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsTimerRunning(!isTimerRunning)}
+                  className={`flex-1 py-1 px-2.5 rounded text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all cursor-pointer ${isTimerRunning ? 'bg-amber-500 hover:bg-amber-600' : 'bg-zinc-900 hover:bg-zinc-850'}`}
+                >
+                  {isTimerRunning ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3 fill-white" />}
+                  {isTimerRunning ? "Pause" : "Start"}
+                </button>
+                <button
+                  onClick={() => {
+                    setIsTimerRunning(false);
+                    setTimerSecondsLeft(1500);
+                  }}
+                  className="p-1 px-2.5 bg-zinc-50 border border-zinc-200 hover:bg-zinc-100 rounded text-zinc-600 text-xs transition-colors cursor-pointer"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Streak Calendar preview */}
+            <div className="bg-zinc-100/60 p-3.5 rounded-xl border border-zinc-150 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-bold text-zinc-500 font-sans">Focus Streak</span>
+                <span className="font-mono font-bold text-indigo-600 bg-indigo-50/70 border border-indigo-100 px-1.5 rounded-full">{stats.streakDays} Days</span>
+              </div>
+              <div className="flex justify-between gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <span key={i} className={`h-2.5 flex-1 rounded-full ${i < stats.streakDays ? 'bg-indigo-600' : 'bg-zinc-200'}`} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+        </nav>
+
+        {/* Viewport content area */}
+        <div className="lg:col-span-9 p-6 sm:p-8 overflow-y-auto">
+          
+          <AnimatePresence mode="wait">
+            
+            {/* VIEW 1: PERFORMANCE ANALYTICS DASHBOARD */}
+            {activeTab === 'analytics' && (
+              <motion.div
+                key="analytics"
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                className="space-y-6"
+              >
+                {/* Title */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-150 pb-5">
+                  <div>
+                    <h1 className="font-display font-bold text-2xl text-zinc-950 tracking-tight">Active Student Diagnostics</h1>
+                    <p className="text-xs text-zinc-500">Real-time indicators measuring cognitive metrics, weak vocabulary concepts, and self-evaluation tests.</p>
+                  </div>
+                  <div className="text-xs font-mono font-bold text-zinc-400 bg-zinc-50 border border-zinc-200 p-2 rounded-lg flex items-center gap-1.5 select-none">
+                    <LineChart className="h-4 w-4 text-indigo-500 animate-pulse-slow" />
+                    Last study sync: Today
+                  </div>
+                </div>
+
+                {/* Score stats row cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">Streak count</span>
+                    <span className="text-3xl font-display font-bold text-zinc-900 mt-2">{stats.streakDays} <span className="text-xs text-zinc-400">days</span></span>
+                    <span className="text-[10px] text-emerald-600 font-semibold mt-1">▲ Ticking continuously</span>
+                  </div>
+                  <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">Completed tests</span>
+                    <span className="text-3xl font-display font-bold text-zinc-900 mt-2">{stats.completedQuizzesCount} <span className="text-xs text-zinc-400">tests</span></span>
+                    <span className="text-[10px] text-indigo-600 font-semibold mt-1">In this session</span>
+                  </div>
+                  <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">Memorized cards</span>
+                    <span className="text-3xl font-display font-bold text-zinc-900 mt-2">{stats.completedFlashcardsCount} <span className="text-xs text-zinc-400">terms</span></span>
+                    <span className="text-[10px] text-emerald-600 font-semibold mt-1">Active recall index</span>
+                  </div>
+                  <div className="bg-white p-4 rounded-xl border border-zinc-200 shadow-sm flex flex-col justify-between">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">Avg Score rating</span>
+                    <span className="text-3xl font-display font-bold text-zinc-900 mt-2">{stats.overallScorePercent}%</span>
+                    <span className="text-[10px] text-indigo-600 font-semibold mt-1">Excellent diagnostic</span>
+                  </div>
+                </div>
+
+                {/* Grid Split: Subject progress details vs Weak Concepts mapping */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 pt-2">
+                  
+                  {/* Subject coverage metrics */}
+                  <div className="md:col-span-4 bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-4">
+                    <h3 className="font-display font-semibold text-sm text-zinc-900">Subject Coverage</h3>
+                    <div className="space-y-4">
+                      {stats.subjectProgress.map((sub, i) => (
+                        <div key={i} className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-semibold">
+                            <span className="text-zinc-650 truncate max-w-[120px]">{sub.name}</span>
+                            <span className="text-zinc-800 font-mono text-[10px]">{Math.round((sub.completedHours / sub.totalHours) * 100)}%</span>
+                          </div>
+                          <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full ${sub.name === selectedSubject ? 'bg-indigo-600' : 'bg-zinc-400'}`} 
+                              style={{ width: `${(sub.completedHours / sub.totalHours) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Weak topics & Insights diagnostics table */}
+                  <div className="md:col-span-8 bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
+                      <h3 className="font-display font-semibold text-sm text-zinc-900 flex items-center gap-1.5">
+                        <AlertCircle className="h-4 w-4 text-rose-500" />
+                        Weak Topics & Active Focus Insights
+                      </h3>
+                      <span className="text-[10px] font-bold font-mono bg-rose-50 text-rose-600 px-2 py-0.5 rounded-full uppercase">
+                        Diagnosed
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs text-zinc-500 leading-normal">
+                        <thead>
+                          <tr className="border-b border-zinc-100 text-zinc-400 font-semibold uppercase tracking-wider font-mono text-[10px]">
+                            <th className="py-2.5">Topic/Concept</th>
+                            <th className="py-2.5 text-center">Missed count</th>
+                            <th className="py-2.5">Calvent Action Plan Recommendation</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stats.weakConcepts.map((item, i) => (
+                            <tr key={i} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50/50">
+                              <td className="py-2.5 font-semibold text-zinc-800 font-display">{item.concept}</td>
+                              <td className="py-2.5 text-center font-mono font-bold text-rose-500 bg-rose-50/30 rounded">{item.timesMissed}x</td>
+                              <td className="py-2.5 pl-4 text-zinc-600 font-sans italic">{item.recommendation}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Fast Recall banner helper */}
+                <div className="bg-indigo-50 border border-indigo-100/80 rounded-2xl p-5 flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="space-y-1 flex-1">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full uppercase font-mono">
+                      <Lightbulb className="h-3.5 w-3.5" />
+                      Tip of the Day
+                    </span>
+                    <h4 className="font-display font-semibold text-sm text-zinc-900 pt-1">
+                      Improve performance with Spaced Repetition (The Leitner System)
+                    </h4>
+                    <p className="text-xs text-zinc-650 leading-relaxed max-w-2xl">
+                      Do not study the entire material concurrently. Filter your Flashcard deck to display only unmemorized terms. High retention is formed by testing weak concepts first.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setActiveTab('flashcards')}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 hover:shadow shadow-sm transition-all flex items-center gap-1 w-full md:w-auto justify-center cursor-pointer"
+                  >
+                    Open Active Flashcards
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+              </motion.div>
+            )}
+
+            {/* VIEW 2: SUMMARY & METRIC OUTLINES */}
+            {activeTab === 'summary' && (
+              <motion.div
+                key="summary"
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                className="space-y-6"
+              >
+                {/* Header */}
+                <div className="border-b border-zinc-150 pb-5">
+                  <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest font-mono">Calvent Synthesis guide</span>
+                  <h1 className="font-display font-bold text-2xl text-zinc-950 tracking-tight mt-1">{currentKit.summary.title}</h1>
+                  <p className="text-xs text-zinc-500 mt-1">Generated by Calvent AI. Complete vocabulary glossaries and markdown outline blocks.</p>
+                </div>
+
+                {/* Sub-Card: Overview Box */}
+                <div className="bg-zinc-50 border border-zinc-150/70 p-4 rounded-xl space-y-1.5 shadow-sm">
+                  <span className="text-[10px] font-bold font-mono text-zinc-400 uppercase tracking-widest block">Executive Overview</span>
+                  <p className="text-xs sm:text-sm text-zinc-700 leading-relaxed font-sans">{currentKit.summary.overview}</p>
+                </div>
+
+                {/* Interactive Glossary Grid */}
+                <div className="space-y-3 pt-2">
+                  <h3 className="font-display font-bold text-sm text-zinc-900 flex items-center gap-1.5">
+                    <Bookmark className="h-4 w-4 text-indigo-500 fill-indigo-100" />
+                    Interactive Key Definitions:
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {currentKit.summary.keyConcepts.map((item, idx) => (
+                      <div 
+                        key={idx} 
+                        className="bg-white p-4 rounded-xl border border-zinc-200/90 shadow-sm space-y-1 hover:border-zinc-300 transition-colors cursor-pointer group"
+                      >
+                        <span className="font-mono text-[9px] text-zinc-400 font-bold uppercase block">Concept {idx + 1}</span>
+                        <h4 className="font-display font-bold text-xs text-zinc-900 group-hover:text-indigo-600 transition-colors uppercase tracking-wide">
+                          {item.term}
+                        </h4>
+                        <p className="text-xs text-zinc-505 leading-relaxed font-sans">
+                          {item.definition}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Detailed Study Guide outline Markdown section */}
+                <div className="pt-4 border-t border-zinc-150">
+                  <h3 className="font-display font-bold text-sm text-zinc-900 mb-3">Academic Study Outline:</h3>
+                  <div className="bg-white border border-zinc-200 rounded-2xl p-6 sm:p-8 shadow-sm markdown-body text-xs sm:text-sm text-zinc-800 leading-relaxed space-y-4">
+                    
+                    {/* Render raw/custom formatted text block styled like clean notes */}
+                    <div dangerouslySetInnerHTML={{ __html: convertMarkdownToHTMLFormat(currentKit.summary.fullMarkdown) }} />
+                    
+                    {/* Notes source reference */}
+                    <div className="mt-8 pt-5 border-t border-zinc-100 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
+                      <span>Source: Original user documentation notes</span>
+                      <span>Analytical Depth: High</span>
+                    </div>
+
+                  </div>
+                </div>
+
+              </motion.div>
+            )}
+
+            {/* VIEW 3: MULTIPLE CHOICE ACTIVE QUIZZES */}
+            {activeTab === 'quiz' && (
+              <motion.div
+                key="quiz"
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                className="space-y-6"
+              >
+                {/* Header */}
+                <div className="border-b border-zinc-150 pb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest font-mono">Cognitive recall assessment</span>
+                    <h1 className="font-display font-bold text-2xl text-zinc-955 tracking-tight mt-1">{selectedSubject}: Smart Testing</h1>
+                    <p className="text-xs text-zinc-500 mt-1">Grade on comprehension and automatically chart weak analytical topics.</p>
+                  </div>
+                  {quizCompleted && (
+                    <button
+                      onClick={() => {
+                        setSelectedQuizAnswers({});
+                        setQuizCompleted(false);
+                        setQuizScore(0);
+                      }}
+                      className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-sm"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Retake Exam Quiz
+                    </button>
+                  )}
+                </div>
+
+                {/* Quiz Question Board list */}
+                <div className="space-y-6">
+                  {currentKit.quiz.map((q, qIndex) => {
+                    const chosenIdx = selectedQuizAnswers[q.id];
+                    const isCorrect = chosenIdx === q.correctAnswerIndex;
+                    
+                    return (
+                      <div 
+                        key={q.id} 
+                        className={`bg-white p-5 rounded-2xl border transition-all shadow-sm ${quizCompleted ? (isCorrect ? 'border-emerald-200 bg-emerald-50/10' : 'border-rose-200 bg-rose-50/10') : 'border-zinc-200 hover:border-zinc-250'}`}
+                      >
+                        {/* Heading */}
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className="text-[10px] font-bold font-mono bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded">
+                            Question {qIndex + 1}
+                          </span>
+                          <span className="text-[10px] font-bold font-mono bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded uppercase">
+                            {q.concept}
+                          </span>
+                        </div>
+
+                        <h3 className="font-display font-bold text-sm sm:text-base text-zinc-900 leading-snug mb-4">
+                          {q.question}
+                        </h3>
+
+                        {/* Options Buttons */}
+                        <div className="grid grid-cols-1 gap-2.5">
+                          {q.options.map((opt, optIdx) => {
+                            const isThisChosen = chosenIdx === optIdx;
+                            const isThisCorrect = optIdx === q.correctAnswerIndex;
+                            
+                            let btnStyle = "bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50";
+                            
+                            if (chosenIdx !== undefined) {
+                              if (isThisCorrect) {
+                                btnStyle = "bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold";
+                              } else if (isThisChosen) {
+                                btnStyle = "bg-rose-50 border-rose-300 text-rose-800 font-semibold";
+                              } else {
+                                btnStyle = "opacity-55 border-zinc-150 bg-white text-zinc-400";
+                              }
+                            } else {
+                              if (isThisChosen) {
+                                btnStyle = "bg-indigo-50/60 border-indigo-500 text-indigo-900 font-semibold";
+                              }
+                            }
+
+                            return (
+                              <button
+                                key={optIdx}
+                                disabled={quizCompleted}
+                                onClick={() => handleAnswerQuizQuestion(q.id, optIdx)}
+                                className={`w-full text-left px-4 py-3 border rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer flex items-center justify-between group ${btnStyle}`}
+                              >
+                                <span>{opt}</span>
+                                {chosenIdx !== undefined && isThisCorrect && (
+                                  <Check className="h-4 w-4 text-emerald-500" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Action feedback explanation */}
+                        {quizCompleted && (
+                          <div className={`mt-4 p-4 rounded-xl text-xs sm:text-sm leading-relaxed border ${isCorrect ? 'bg-emerald-50/80 border-emerald-100 text-emerald-800' : 'bg-rose-50/80 border-rose-100 text-rose-800'}`}>
+                            <strong className="block mb-1">
+                              {isCorrect ? "✓ Outstanding!" : "✗ Concept Review Needed"}
+                            </strong>
+                            <p className="text-zinc-700"><strong>Rationale:</strong> {q.explanation}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Grade and Submit Button */}
+                {!quizCompleted && (
+                  <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-150 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <span className="text-xs text-zinc-500 font-sans">
+                      {Object.keys(selectedQuizAnswers).length} of {currentKit.quiz.length} questions attempted.
+                    </span>
+                    <button
+                      onClick={handleCompleteQuizAndGradeText}
+                      disabled={Object.keys(selectedQuizAnswers).length < currentKit.quiz.length}
+                      className="px-6 py-2.5 bg-indigo-600 disabled:opacity-50 hover:bg-indigo-700 disabled:hover:bg-indigo-600 text-white rounded-lg text-xs font-semibold cursor-pointer shadow-sm transition-all"
+                    >
+                      Process & Grade Quiz Results
+                    </button>
+                  </div>
+                )}
+
+                {/* Quiz Completed Overlay chart block */}
+                {quizCompleted && (
+                  <motion.div 
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    className="p-6 bg-slate-900 text-white rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6"
+                  >
+                    <div className="space-y-2 text-center md:text-left">
+                      <div className="inline-flex items-center gap-1.5 text-indigo-400 text-xs font-bold font-mono bg-indigo-950 px-2 py-0.5 rounded-full uppercase">
+                        <Award className="h-3.5 w-3.5" />
+                        Testing Summary Complete
+                      </div>
+                      <h3 className="font-display text-xl font-bold">You scored: {quizScore}%</h3>
+                      <p className="text-xs text-zinc-300 leading-relaxed max-w-md">
+                        Your scores have been synchronized with your central diagnostics profile dashboard. Missed areas are factored to update recommendations.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => setActiveTab('analytics')}
+                        className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                      >
+                        View Performance Dashboard
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('flashcards')}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow transition-colors cursor-pointer"
+                      >
+                        Practice Flashcards
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+
+              </motion.div>
+            )}
+
+            {/* VIEW 4: FLASHCARD COMPONENT PLAYGROUND */}
+            {activeTab === 'flashcards' && (
+              <motion.div
+                key="flashcards"
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                className="space-y-6"
+              >
+                {/* Header */}
+                <div className="border-b border-zinc-150 pb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest font-mono">Spaced active repetition</span>
+                    <h1 className="font-display font-bold text-2xl text-zinc-950 tracking-tight mt-1">{selectedSubject}: Flashcard Deck</h1>
+                    <p className="text-xs text-zinc-500 mt-1">Memorize concepts. Hide cards from rotation when mastered.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setFlashcardDeck(currentKit.flashcards.map(f => ({ ...f, memorized: false })));
+                      setCurrentCardIndex(0);
+                      setIsFlipped(false);
+                    }}
+                    className="px-3 py-1.5 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 bg-white font-semibold text-xs rounded-lg shadow-sm transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Reset Decks
+                  </button>
+                </div>
+
+                {/* Progress bar deck counts */}
+                <div className="flex items-center justify-between text-xs text-zinc-500 font-mono font-bold bg-zinc-50 p-3 rounded-xl border border-zinc-150">
+                  <span>UNMEMORIZED CARD COUNT: {flashcardDeck.filter(fc => !fc.memorized).length} key</span>
+                  <span>PROGRESS COVERAGE: {Math.round((flashcardDeck.filter(fc => fc.memorized).length / flashcardDeck.length) * 100)}%</span>
+                </div>
+
+                {/* Flashcard Body container */}
+                {flashcardDeck.length > 0 && (
+                  <div className="flex flex-col items-center justify-center space-y-6 max-w-xl mx-auto py-6">
+                    
+                    {/* Flippable card panel */}
+                    <div
+                      onClick={() => setIsFlipped(!isFlipped)}
+                      className={`w-full h-64 bg-white border-2 rounded-2xl shadow-md p-6 flex flex-col items-center justify-center text-center transition-all cursor-pointer relative group card-flip select-none ${isFlipped ? 'border-indigo-400 bg-indigo-50/5' : 'border-zinc-200 hover:border-zinc-300'}`}
+                    >
+                      <span className="absolute top-3.5 right-4 text-[9px] font-bold font-mono tracking-widest text-zinc-400 uppercase bg-zinc-50/80 px-2 py-0.5 rounded group-hover:text-indigo-600 group-hover:bg-indigo-50 transition-colors">
+                        Click card to flip definition
+                      </span>
+
+                      <AnimatePresence mode="wait">
+                        {!isFlipped ? (
+                          <motion.div
+                            key="front"
+                            initial={{ opacity: 0, rotateY: 90 }}
+                            animate={{ opacity: 1, rotateY: 0 }}
+                            exit={{ opacity: 0, rotateY: -90 }}
+                            className="space-y-2 px-4"
+                          >
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono">Term Query</span>
+                            <h2 className="font-display font-bold text-lg sm:text-2xl text-zinc-900 leading-snug">
+                              {flashcardDeck[currentCardIndex]?.front}
+                            </h2>
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            key="back"
+                            initial={{ opacity: 0, rotateY: -90 }}
+                            animate={{ opacity: 1, rotateY: 0 }}
+                            exit={{ opacity: 0, rotateY: 90 }}
+                            className="space-y-3 px-4"
+                          >
+                            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest font-mono">Verified Explanation</span>
+                            <p className="font-sans text-sm sm:text-base text-zinc-750 leading-relaxed font-medium">
+                              {flashcardDeck[currentCardIndex]?.back}
+                            </p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Memorized stamp */}
+                      {flashcardDeck[currentCardIndex]?.memorized && (
+                        <div className="absolute top-3 left-4 text-[9px] font-mono font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded uppercase">
+                          ✓ MASTERED
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Navigation controllers toolbar */}
+                    <div className="flex items-center justify-between w-full gap-4">
+                      <button
+                        onClick={handlePrevCard}
+                        className="px-4 py-2 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-semibold text-zinc-750 transition-colors cursor-pointer shadow-sm"
+                      >
+                        Previous Card
+                      </button>
+
+                      <div className="text-xs font-semibold text-zinc-500 font-mono">
+                        {currentCardIndex + 1} of {flashcardDeck.length} cards
+                      </div>
+
+                      <button
+                        onClick={handleNextCard}
+                        className="px-4 py-2 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-lg text-xs font-semibold text-zinc-750 transition-colors cursor-pointer shadow-sm"
+                      >
+                        Next Card
+                      </button>
+                    </div>
+
+                    {/* Memorization Mastery Action Buttons */}
+                    <div className="grid grid-cols-2 gap-3 w-full pt-2">
+                      <button
+                        disabled={flashcardDeck[currentCardIndex]?.memorized}
+                        onClick={() => handleMarkMemoCard(flashcardDeck[currentCardIndex].id)}
+                        className="py-3 bg-emerald-600 disabled:opacity-50 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider font-mono"
+                      >
+                        <Check className="h-4 w-4" />
+                        Mark as Memorized
+                      </button>
+                      <button
+                        onClick={handleNextCard}
+                        className="py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-750 font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider font-mono border border-zinc-200"
+                      >
+                        Review Later
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                  </div>
+                )}
+
+              </motion.div>
+            )}
+
+            {/* VIEW 5: SITUATIONAL EXAMS */}
+            {activeTab === 'exam' && (
+              <motion.div
+                key="exam"
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                className="space-y-6"
+              >
+                {/* Header */}
+                <div className="border-b border-zinc-150 pb-5">
+                  <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest font-mono">Advanced Case Synthesis</span>
+                  <h1 className="font-display font-bold text-2xl text-zinc-950 tracking-tight mt-1">{selectedSubject}: Practice Exam Mode</h1>
+                  <p className="text-xs text-zinc-500 mt-1">Compose detailed textbook answers. Unlock strict criteria grading rubrics to evaluate your mastery.</p>
+                </div>
+
+                {/* Exam Board */}
+                <div className="space-y-6">
+                  {currentKit.practiceExam.map((pe, idx) => (
+                    <div key={pe.id} className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm space-y-4">
+                      
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold font-mono bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded">
+                          Midterm Scenario Check {idx + 1}
+                        </span>
+                        <span className="text-[10px] font-bold font-mono bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded">
+                          Synthesis
+                        </span>
+                      </div>
+
+                      <h3 className="font-display font-bold text-sm sm:text-base text-zinc-900 leading-relaxed font-sans">
+                        {pe.question}
+                      </h3>
+
+                      <div className="bg-zinc-50 hover:bg-zinc-100/50 p-3.5 rounded-xl border border-zinc-150 text-xs text-zinc-600 italic flex items-center gap-2">
+                        <HelpCircle className="h-4 w-4 text-zinc-400 shrink-0" />
+                        <span><strong>Mental check helper:</strong> {pe.hint}</span>
+                      </div>
+
+                      {/* Text area response */}
+                      <textarea
+                        value={examAnswer[pe.id] || ""}
+                        onChange={(e) => setExamAnswer(prev => ({ ...prev, [pe.id]: e.target.value }))}
+                        placeholder="Draft your detailed academic essay response or outline explanation here..."
+                        className="w-full h-36 p-3 bg-zinc-50 hover:bg-zinc-50 text-xs sm:text-sm text-zinc-800 border border-zinc-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans transition-colors resize-none leading-relaxed"
+                      />
+
+                      {/* Trigger Rubric */}
+                      <div className="flex justify-end gap-3">
+                        <button
+                          onClick={() => {
+                            if (!examAnswer[pe.id]?.trim()) {
+                              alert("Please input some response draft details first before assessing.");
+                              return;
+                            }
+                            setShowExamRubric(prev => ({ ...prev, [pe.id]: !prev[pe.id] }));
+                          }}
+                          className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          {showExamRubric[pe.id] ? "Minimize Grading Rubric" : "View grading criteria and rubric"}
+                          <ChevronRight className="h-4.5 w-4.5" />
+                        </button>
+                      </div>
+
+                      {/* Active Rubric content explanation */}
+                      {showExamRubric[pe.id] && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="p-5 bg-indigo-50/50 rounded-xl border border-indigo-100 text-xs sm:text-sm text-zinc-700 leading-relaxed space-y-2.5"
+                        >
+                          <h4 className="font-display font-bold text-zinc-900 text-xs tracking-wider uppercase">
+                            Calvent Grading Criteria & expected parameters:
+                          </h4>
+                          <p>{pe.rubric}</p>
+                          <div className="pt-3 border-t border-indigo-100 flex items-center justify-between">
+                            <span className="text-[10px] font-mono text-indigo-700">Self-Grading feedback check</span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  alert("Self Grade logged! Excellent recall execution.");
+                                  setShowExamRubric(prev => ({ ...prev, [pe.id]: false }));
+                                }}
+                                className="px-3 py-1 bg-white border border-emerald-200 text-emerald-800 rounded font-semibold text-xs transition-colors hover:bg-emerald-50 cursor-pointer"
+                              >
+                                I followed the criteria perfectly
+                              </button>
+                              <button
+                                onClick={() => {
+                                  alert("Self Grade logged. This topic is queued for outline review.");
+                                  setShowExamRubric(prev => ({ ...prev, [pe.id]: false }));
+                                }}
+                                className="px-3 py-1 bg-white border border-rose-200 text-rose-800 rounded font-semibold text-xs transition-colors hover:bg-rose-50 cursor-pointer"
+                              >
+                                Review concept summary later
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+
+                    </div>
+                  ))}
+                </div>
+
+              </motion.div>
+            )}
+
+            {/* VIEW 6: PERSONALIZED STUDY SYLLABUS SCHEDULE */}
+            {activeTab === 'studyplan' && (
+              <motion.div
+                key="studyplan"
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                className="space-y-6"
+              >
+                {/* Header */}
+                <div className="border-b border-zinc-150 pb-5">
+                  <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest font-mono">Personalized study timeline</span>
+                  <h1 className="font-display font-bold text-2xl text-zinc-950 tracking-tight mt-1">{selectedSubject}: Custom Study Schedule</h1>
+                  <p className="text-xs text-zinc-500 mt-1">AI calculated day-by-day active recall checkpoints built on notes structure.</p>
+                </div>
+
+                {/* Study Plan list calendar */}
+                <div className="space-y-4">
+                  {currentKit.studyPlan.map((step, idx) => {
+                    const isActive = activePlanStep === idx;
+                    
+                    return (
+                      <div 
+                        key={idx}
+                        onClick={() => {
+                          setActivePlanStep(idx);
+                          // Option to adjust pomodoro timer to match plan duration!
+                          setTimerSecondsLeft(step.durationMinutes * 60);
+                          setIsTimerRunning(false);
+                        }}
+                        className={`p-5 rounded-2xl border transition-all cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 ${isActive ? 'bg-indigo-50/20 border-indigo-300' : 'bg-white border-zinc-200 hover:border-zinc-250 hover:bg-zinc-50/50'}`}
+                      >
+                        <div className="flex gap-4 items-start">
+                          <div className={`h-11 w-11 shrink-0 rounded-xl font-display font-bold text-sm flex items-center justify-center border uppercase tracking-wider ${isActive ? 'bg-indigo-600 border-indigo-700 text-white' : 'bg-zinc-50 border-zinc-200 text-zinc-500'}`}>
+                            {step.day.replace(" ", "")}
+                          </div>
+                          
+                          <div className="space-y-1">
+                            <h4 className="font-display font-bold text-sm text-zinc-900">{step.topic}</h4>
+                            <div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+                              <span className="bg-zinc-100 border border-zinc-150 font-mono text-[10px] px-2 py-0.5 rounded-full uppercase">
+                                Action Method: {step.method}
+                              </span>
+                              <span className="bg-zinc-100 border border-zinc-150 font-mono text-[10px] px-2 py-0.5 rounded-full uppercase">
+                                Duration: {step.durationMinutes} Minutes
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {isActive ? (
+                            <div className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2.5 py-1 rounded border border-indigo-200 flex items-center gap-1">
+                              <span className="h-1.5 w-1.5 rounded-full bg-indigo-600 animate-ping"></span>
+                              Active Focus step & timer loaded
+                            </div>
+                          ) : (
+                            <div className="text-[10px] font-semibold text-zinc-400 group-hover:text-zinc-650 transition-colors">
+                              Click to load timer outline
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Custom plan timer controller instructions */}
+                <div className="bg-zinc-50 p-5 rounded-xl border border-zinc-200 flex items-center justify-between gap-4">
+                  <p className="text-xs text-zinc-650 leading-relaxed font-sans max-w-xl">
+                    <strong>Loaded Topic Timer:</strong> Selecting any schedule day from the list automatically synchronizes the Pomodoro Focus Timer in the left rail to match the calculated study duration constraint. Click <strong>Start Session</strong> to begin active recall testing.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setIsTimerRunning(true);
+                      const target = document.getElementById('app-workspace-panel');
+                      if (target) target.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="px-4 py-2 bg-zinc-900 text-white rounded-lg text-xs font-semibold hover:bg-zinc-800 transition-all font-sans text-center cursor-pointer shadow-sm"
+                  >
+                    Launch Session
+                  </button>
+                </div>
+
+              </motion.div>
+            )}
+
+          </AnimatePresence>
+        </div>
+
+      </div>
+
+      {/* MODAL / SLIDE-OVER: ADD SUBJECT NOTES */}
+      <AnimatePresence>
+        {showAddForm && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl max-w-xl w-full border border-zinc-200 shadow-2xl overflow-hidden text-left"
+            >
+              
+              {/* Header */}
+              <div className="px-6 py-4 bg-zinc-50 border-b border-zinc-150/80 flex items-center justify-between">
+                <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest font-mono flex items-center gap-1">
+                  <Sparkles className="h-4 w-4" />
+                  Calvent AI study compiler
+                </span>
+                <button 
+                  onClick={() => setShowAddForm(false)}
+                  className="p-1 text-zinc-400 hover:text-zinc-650 hover:bg-zinc-100 rounded-lg transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Form Body */}
+              <form onSubmit={handleAddNewCustomDeck} className="p-6 space-y-4">
+                
+                <h3 className="font-display font-bold text-lg text-zinc-950">Add custom subject notes:</h3>
+                
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-405 uppercase tracking-wide">Subject Title:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="E.g., Econ-201: Microeconomic Supply"
+                    value={newNoteTitle}
+                    onChange={(e) => setNewNoteTitle(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg text-xs sm:text-sm text-zinc-805 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-zinc-405 uppercase tracking-wide">Student Notes Text:</label>
+                    <span className="text-[10px] font-mono text-zinc-400 italic">Supports up to 5,000 characters</span>
+                  </div>
+                  <textarea
+                    required
+                    placeholder="Paste your unformatted slide text, notebook scraps, definitions, textbook paragraphs, or copy/pasted summaries directly into this box..."
+                    value={newNoteText}
+                    onChange={(e) => setNewNoteText(e.target.value)}
+                    className="w-full h-44 p-3.5 bg-zinc-50 text-xs sm:text-sm text-zinc-805 border border-zinc-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono transition-colors resize-none leading-relaxed"
+                  />
+                </div>
+
+                {isGenerating && (
+                  <div className="p-4 bg-indigo-50 text-indigo-700 rounded-xl space-y-2 text-xs sm:text-sm border border-indigo-100 font-sans">
+                    <div className="flex items-center justify-between font-semibold">
+                      <span>Generating customized summaries, cards, planning agendas, & MCQ checks...</span>
+                      <span>{generatingProgress}%</span>
+                    </div>
+                    <div className="w-full h-1 bg-indigo-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-600 transition-all duration-300" style={{ width: `${generatingProgress}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Action CTA list buttons */}
+                <div className="flex justify-end gap-3 pt-4 border-t border-zinc-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(false)}
+                    className="px-4 py-2 border border-zinc-200 text-zinc-600 rounded-lg text-xs font-semibold hover:bg-zinc-50 transition-colors cursor-pointer"
+                  >
+                    Cancel Action
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isGenerating}
+                    className="px-5 py-2.5 bg-indigo-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-1 cursor-pointer shadow shadow-indigo-600/10"
+                  >
+                    Generate Study Kit
+                  </button>
+                </div>
+
+              </form>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+    </div>
+  );
+}
+
+// Custom simple parser to support strong bold highlights and list items elegantly in outlines
+function convertMarkdownToHTMLFormat(markdown: string) {
+  if (!markdown) return "";
+  
+  // Quick procedural parsing maps
+  let html = markdown
+    .replace(/^### (.*$)/gim, '<h3 class="font-display font-bold text-sm text-zinc-900 mt-5 mb-2 border-b border-zinc-100 pb-1">$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2 class="font-display font-bold text-base text-zinc-900 mt-6 mb-3 border-b border-zinc-100 pb-1.5">$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1 class="font-display font-bold text-lg text-zinc-950 mt-8 mb-4 border-b-2 border-zinc-100 pb-2">$1</h1>')
+    .replace(/^\- (.*$)/gim, '<li class="text-xs sm:text-sm text-zinc-700 leading-normal mb-1.5 list-disc ml-4">$1</li>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong class="text-zinc-950 font-semibold bg-zinc-50 py-0.5 px-1 rounded border border-zinc-200/50">$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em class="text-zinc-800 italic">$1</em>');
+
+  // replace breaks
+  html = html.split("\n\n").join("</p><p class='mb-3 text-xs sm:text-sm text-zinc-700'>");
+  return `<div>${html}</div>`;
+}

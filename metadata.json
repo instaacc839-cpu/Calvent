@@ -1,0 +1,222 @@
+import React, { useState } from "react";
+import { Check, ArrowRight, ShieldCheck, HelpCircle, Mail } from "lucide-react";
+
+export default function CtaSection({ setView }: { setView: (v: 'landing' | 'app') => void }) {
+  const [email, setEmail] = useState("");
+  const [isSubscribed, setIsSubscribed] = useState(false);
+
+  const plans = [
+    {
+      name: "Syllabus Free",
+      price: "$0",
+      period: "forever",
+      description: "Foundational study material processing tailored for individual students.",
+      features: [
+        "Include 3 standard pre-loaded subjects",
+        "Generate up to 3 custom AI study kits per month",
+        "Standard multi-choice quiz play testing",
+        "Leitner flashcards memory tracking",
+        "Local memory study streak logs"
+      ],
+      cta: "Try Free Sandbox",
+      popular: false
+    },
+    {
+      name: "Academic Pro",
+      price: "$9",
+      period: "per month",
+      description: "Enterprise cognitive tools engineered for advanced academic tracks.",
+      features: [
+        "Unlimited custom AI study kit uploads",
+        "Paid Ivy-League grade reasoning models support",
+        "Detailed sub-concept weakness recommendation tables",
+        "Situational exam prep with descriptive self-grading rubrics",
+        "Cross-device progress syncing & PDF exporter",
+        "Priority dedicated support pipeline"
+      ],
+      cta: "Unlock Academic Pro",
+      popular: true
+    }
+  ];
+
+  const handleSubscribe = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (email.trim()) {
+      setIsSubscribed(true);
+      setTimeout(() => {
+        setIsSubscribed(false);
+        setEmail("");
+      }, 3000);
+    }
+  };
+
+  return (
+    <div id="pricing-section" className="bg-zinc-50 border-t border-zinc-150">
+      
+      {/* 1. SEAMLESS PRICING PLANS SECTION */}
+      <div className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div className="max-w-3xl mx-auto text-center mb-16 space-y-4">
+          <span className="text-xs font-bold text-indigo-650 uppercase tracking-widest font-sans bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+            Fair academic pricing
+          </span>
+          <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950">
+            Simple plans. Built to accelerate.
+          </h2>
+          <p className="font-sans text-sm sm:text-base text-zinc-500 leading-relaxed">
+            Upgrade when you require high-volume AI uploads, scenario evaluations, or professional diagnostic support. Cancel immediately with one click.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto items-stretch">
+          {plans.map((p, i) => (
+            <div 
+              key={i} 
+              className={`p-8 bg-white border rounded-2xl flex flex-col justify-between relative transition-all ${p.popular ? 'border-zinc-900 shadow-md ring-1 ring-zinc-950' : 'border-zinc-200 hover:border-zinc-300 shadow-sm'}`}
+            >
+              {p.popular && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-zinc-950 text-white font-mono text-[9px] font-bold uppercase tracking-wider">
+                  RECOMMENDED FOR MIDTERMS
+                </span>
+              )}
+
+              <div>
+                <div className="flex items-baseline justify-between mb-2">
+                  <h3 className="font-display font-bold text-lg text-zinc-900">{p.name}</h3>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-display font-bold text-zinc-950">{p.price}</span>
+                    <span className="text-xs text-zinc-500 font-sans">/{p.period}</span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-zinc-505 leading-relaxed mb-6 font-normal">
+                  {p.description}
+                </p>
+
+                <div className="h-px bg-zinc-100 my-6" />
+
+                <ul className="space-y-3 mb-8">
+                  {p.features.map((f, idx) => (
+                    <li key={idx} className="flex items-start gap-2.5 text-xs text-zinc-650 leading-normal">
+                      <Check className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <button
+                onClick={() => setView('app')}
+                className={`w-full py-3 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer font-sans ${p.popular ? 'bg-zinc-90 w-full bg-zinc-900 hover:bg-zinc-800 text-white shadow-md' : 'bg-zinc-50 hover:bg-zinc-100 text-zinc-700 border border-zinc-200'}`}
+              >
+                {p.cta}
+              </button>
+            </div>
+          ))}
+        </div>
+
+      </div>
+
+      {/* 2. MAIN NEWSLETTER SIGNUP CTA */}
+      <div className="py-20 bg-white border-y border-zinc-150">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="bg-zinc-50/75 border border-zinc-200 rounded-3xl p-8 sm:p-12 relative overflow-hidden shadow-sm study-card-border">
+            
+            {/* Background blur highlight */}
+            <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-50 rounded-full filter blur-[60px] pointer-events-none" />
+
+            <div className="max-w-2xl mx-auto space-y-6 relative">
+              <h2 className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-zinc-950">
+                Ready to transform your studying?
+              </h2>
+              <p className="font-sans text-xs sm:text-sm text-zinc-650 max-w-lg mx-auto leading-relaxed">
+                Connect with thousands of students processing clean, high-impact notes. Draft summaries in under 5 seconds with modern AI.
+              </p>
+
+              <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row items-center gap-3 max-w-md mx-auto pt-2">
+                <div className="relative w-full">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="Enter your student email..."
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-250 text-xs sm:text-sm rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full sm:w-auto px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg shadow-sm font-sans flex items-center justify-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                >
+                  {isSubscribed ? "Check your Inbox!" : "Join Free"}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </form>
+
+              <div className="flex items-center justify-center gap-5 pt-3 text-[10px] text-zinc-400 font-medium uppercase font-mono">
+                <span className="flex items-center gap-1">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                  No card required
+                </span>
+                <span>•</span>
+                <span>Self-Hosted & Secure</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      {/* 3. PREMIUM MODERN FOOTER */}
+      <footer className="bg-white py-12 border-t border-zinc-100 text-xs text-zinc-400">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div className="space-y-3 col-span-2 md:col-span-1">
+              <span className="font-display font-semibold text-zinc-900 text-sm tracking-tight">Calvent</span>
+              <p className="text-xs text-zinc-400 leading-relaxed pr-4">
+                Ivy-grade cognitive compilation engineered for dense academic material, textbooks, and research drafts.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <span className="font-semibold text-zinc-950 font-sans block">Resource Hub</span>
+              <ul className="space-y-1.5 font-medium">
+                <li><a onClick={() => setView('app')} className="hover:text-zinc-650 cursor-pointer">Interactive Sandbox</a></li>
+                <li><a className="hover:text-zinc-650 cursor-pointer">Study Guides</a></li>
+                <li><a className="hover:text-zinc-650 cursor-pointer">Student Directory</a></li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <span className="font-semibold text-zinc-950 font-sans block">Academic Integrity</span>
+              <ul className="space-y-1.5 font-medium">
+                <li><a className="hover:text-zinc-650 cursor-pointer">Syllabus Compliance</a></li>
+                <li><a className="hover:text-zinc-650 cursor-pointer">Active Recall FAQ</a></li>
+                <li><a className="hover:text-zinc-650 cursor-pointer">Anti-Plagiarism Checks</a></li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <span className="font-semibold text-zinc-950 font-sans block">Enterprise API</span>
+              <ul className="space-y-1.5 font-medium">
+                <li><a className="hover:text-zinc-650 cursor-pointer">Node SDK Wrapper</a></li>
+                <li><a className="hover:text-zinc-650 cursor-pointer">System Security</a></li>
+                <li><a className="hover:text-zinc-650 cursor-pointer">Status Live</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="h-px bg-zinc-100 my-8" />
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 font-medium uppercase font-mono text-[9px] tracking-wider text-zinc-450">
+            <span>© 2026 Calvent Academic Technologies Inc. All rights reserved.</span>
+            <div className="flex gap-4">
+              <a className="hover:text-zinc-700 cursor-pointer">Privacy Charter</a>
+              <span>•</span>
+              <a className="hover:text-zinc-700 cursor-pointer">Terms of Service</a>
+            </div>
+          </div>
+        </div>
+      </footer>
+
+    </div>
+  );
+}

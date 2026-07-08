@@ -1,0 +1,80 @@
+import React from "react";
+import { UploadCloud, Zap, Award, ArrowRight } from "lucide-react";
+
+export default function HowItWorks() {
+  
+  const steps = [
+    {
+      number: "01",
+      icon: <UploadCloud className="h-6 w-6 text-indigo-600" />,
+      title: "Upload Materials",
+      description: "Drop your PDF slides, unformatted lecture documents, or raw study notes directly into our secure platform interface.",
+    },
+    {
+      number: "02",
+      icon: <Zap className="h-6 w-6 text-indigo-600" />,
+      title: "AI Analyzes Material",
+      description: "Our Gemini-powered cognitive parser extracts terminologies, builds analytical multiple-choice checks, and prepares study files.",
+    },
+    {
+      number: "03",
+      icon: <Award className="h-6 w-6 text-indigo-600" />,
+      title: "Study & Ace Exams",
+      description: "Take targeted quizzes, flip active terminology cards, answer scenario-based practice questions, and monitor progress.",
+    },
+  ];
+
+  return (
+    <section id="process" className="py-20 bg-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        {/* Section Header */}
+        <div className="max-w-3xl mx-auto text-center mb-16 space-y-4">
+          <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-sans bg-zinc-50 border border-zinc-200/80 px-3 py-1 rounded-full">
+            Accelerate your learning curve
+          </span>
+          <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950">
+            Three simple steps to mastery.
+          </h2>
+          <p className="font-sans text-sm sm:text-base text-zinc-500 max-w-xl mx-auto leading-relaxed">
+            Unnecessary details stripped down. An intuitive pipeline configured for high retention and seamless exam preparation.
+          </p>
+        </div>
+
+        {/* Steps Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 relative">
+          
+          {/* Connecting Lines for Desktop */}
+          <div className="hidden md:block absolute top-1/4 left-1/6 right-1/6 h-[1.5px] bg-zinc-100 -z-10" />
+
+          {steps.map((step, index) => (
+            <div key={index} className="flex flex-col space-y-5 bg-zinc-50/50 p-6 rounded-2xl border border-zinc-100 hover:bg-zinc-50 transition-colors">
+              
+              {/* Icon & Step Number */}
+              <div className="flex items-center justify-between">
+                <div className="h-12 w-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                  {step.icon}
+                </div>
+                <span className="text-3xl font-display font-bold text-zinc-200">
+                  {step.number}
+                </span>
+              </div>
+
+              {/* Title & Body */}
+              <div className="space-y-2">
+                <h3 className="font-display font-semibold text-lg text-zinc-950">
+                  {step.title}
+                </h3>
+                <p className="font-sans text-xs sm:text-sm text-zinc-500 leading-relaxed">
+                  {step.description}
+                </p>
+              </div>
+
+            </div>
+          ))}
+        </div>
+
+      </div>
+    </section>
+  );
+}

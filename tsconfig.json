@@ -1,0 +1,6 @@
+{
+  "name": "Calvent",
+  "description": "Premium AI study platform converting notes into summaries, quizzes, flashcards, practice exams, and study plans.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
